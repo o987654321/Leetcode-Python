@@ -1,13 +1,17 @@
 #老師可以不要當我嗎?順便給我高分一點，資傳系弱智已努力了
+# -*- coding: utf-8 -*-
 
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin # 增加這個庫，將網頁內容相對網址轉為絕對網址
 import json
 import csv
 import sqlite3
 
 # 亞大資工副教授網頁
+# url = "https://csie.asia.edu.tw/zh_tw/associate_professors_2"
 url = "https://csie.asia.edu.tw/zh_tw/TeacherIntroduction"
+
 headers = {
     "User-Agent": "Mozilla/5.0"
 }
@@ -19,14 +23,44 @@ response.encoding = 'utf-8'
 # 解析 HTML
 soup = BeautifulSoup(response.text, 'html.parser')  # 使用 html.parser 解析器
 
+# 取得教師資訊頁url清單
+facuUrl = []
+for link in soup.select('div.faculty-links>a'):
+    facuUrl.append(link['href'])
+
+
 # 抓每位老師的專長
 data = []
 
+# 向師資陣容頁面依序發送請求
+for u in facuUrl:
+    response = requests.get(urljoin(url, u), headers=headers)
+    response.encoding = 'utf-8'
+    # 解析 HTML
+    soup = BeautifulSoup(response.text, 'html.parser')  # 使用 html.parser 解析器
+    teachers = soup.select('div.i-member-item.col-md-6') # 找到所有老師的卡片
+    if len(teachers)==0:
+       continue
+    for teacher in teachers: # 依序取得教師姓名及研究領域
+        name = teacher.find('span', class_='i-member-value member-data-value-name').text.strip()
+        expertiseTag = teacher.find('span', class_='i-member-value member-data-value-7')
+        if expertiseTag:
+            expertise = expertiseTag.text.strip()
+        else:
+            expertise = ''
+        print(name, expertise)
+        data.append({
+            "name": name,
+            "expertise": expertise
+        })
+
+"""
 # 找到所有老師的卡片（每個人都是一個 .teacher_content）
 teachers = soup.find_all("div", class_="teacher_content")
 
 for teacher in teachers:
-    name_tag = teacher.find("div", class_="teacher_name")
+    #name_tag = teacher.find("div", class_="teacher_name")
+    name_tag = teacher.text()
     expertise_tag = teacher.find("div", class_="teacher_expertise")
 
     if name_tag and expertise_tag:
@@ -36,6 +70,7 @@ for teacher in teachers:
             "name": name,
             "expertise": expertise
         })
+"""
 
 # 儲存為 JSON 檔
 with open("asia_university_professors.json", "w", encoding="utf-8") as f:
@@ -44,7 +79,9 @@ with open("asia_university_professors.json", "w", encoding="utf-8") as f:
 print("專長資料已儲存為 JSON")
 
 # 儲存為 CSV 檔
-with open("asia_university_professors.csv", mode='w', newline='', encoding='utf-8') as f:
+# with open("asia_university_professors.csv", mode='w', newline='', encoding='utf-8') as f:
+# 修改編碼為"utf-8-sig"，避免開啟時發生亂碼
+with open("asia_university_professors.csv", mode='w', newline='', encoding='utf-8-sig') as f:
     writer = csv.DictWriter(f, fieldnames=["name", "expertise"])
     writer.writeheader()
     writer.writerows(data)
@@ -74,4 +111,6 @@ conn.commit()
 conn.close()
 
 print("專長資料已儲存到 SQLite 資料庫")
+
+
 
